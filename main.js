@@ -1,0 +1,159 @@
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const createDecimalSelect = (name, intMin, intMax, fracMin = 0, fracMax = 99) => {
+    const wrapper = document.createElement("div");
+
+    const intSel = document.createElement("select");
+    intSel.name = name + "_int";
+    for (let i = intMin; i <= intMax; i++) {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.text = i;
+      intSel.appendChild(opt);
+    }
+
+    const fracSel = document.createElement("select");
+    fracSel.name = name + "_frac";
+    for (let i = fracMin; i <= fracMax; i++) {
+      const opt = document.createElement("option");
+      opt.value = i.toString().padStart(2, "0");
+      opt.text = "." + i.toString().padStart(2, "0");
+      fracSel.appendChild(opt);
+    }
+
+    wrapper.appendChild(intSel);
+    wrapper.appendChild(fracSel);
+    return wrapper;
+};
+
+  const container = document.querySelector(".boat-form-container");
+  const boatCount = 6;
+
+  const createSelect = (name, min, max, step = 1) => {
+    const select = document.createElement("select");
+    select.name = name;
+    for (let i = min; i <= max + 1e-8; i += step) {
+      const option = document.createElement("option");
+      option.value = i.toFixed(step < 1 ? 2 : 0);
+      option.textContent = i.toFixed(step < 1 ? 2 : 0);
+      select.appendChild(option);
+    }
+    return select;
+  };
+
+  for (let i = 0; i < boatCount; i++) {
+    const box = document.createElement("div");
+    box.className = "boat-box";
+    box.innerHTML = `<h3>${i + 1}号艇</h3>`;
+
+    const fields = [
+      ["枠番勝率", 0, 100, 0.1],
+      ["枠番2連対率", 0, 100, 0.1],
+      ["枠番3連対率", 0, 100, 0.1],
+      ["モーター順位", 1, 50, 1],
+      ["マクール評価", 1, 7, 1],
+      ["展示タイム", 6.0, 8.0, 0.01],
+      ["周回展示タイム", 36.0, 39.0, 0.01],
+      ["周り足タイム", 5.0, 7.0, 0.01],
+      ["直線タイム", 5.0, 8.0, 0.01],
+      ["平均ST", 0.0, 0.3, 0.01],
+      ["スタート順位", 1.0, 6.0, 1],
+      ["決まり手勝率", 0.0, 100.0, 0.1]
+    ];
+
+    fields.forEach(([label, min, max, step]) => {
+      const labelEl = document.createElement("label");
+      labelEl.innerText = label;
+      box.appendChild(labelEl);
+      
+if (["展示タイム", "周回展示タイム", "周り足タイム", "直線タイム", "平均ST"].includes(label)) {
+  box.appendChild(createDecimalSelect(`${label}_${i}`, Math.floor(min), Math.floor(max)));
+} else {
+  box.appendChild(createSelect(`${label}_${i}`, min, max, step));
+}
+
+      box.appendChild(document.createElement("br"));
+    });
+
+    // フライング
+    const flyLabel = document.createElement("label");
+    flyLabel.innerText = "フライング";
+    const flySelect = document.createElement("select");
+    flySelect.name = `フライング_${i}`;
+    ["0", "F1", "F2", "F3"].forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.text = v;
+      flySelect.appendChild(opt);
+    });
+    box.appendChild(flyLabel);
+    box.appendChild(flySelect);
+    box.appendChild(document.createElement("br"));
+
+    container.appendChild(box);
+  }
+});
+
+document.getElementById("calc").addEventListener("click", () => {
+  const boatCount = 6;
+  let scores = [];
+
+  for (let i = 0; i < boatCount; i++) {
+    let score = 0;
+
+    const get = (label) => {
+      const el = document.querySelector(`[name='${label}_${i}']`);
+      return el ? Number(el.value) : 0;
+    };
+
+    score += get("枠番勝率") * 0.25;
+    score += get("枠番2連対率") * 0.05;
+    score += get("枠番3連対率") * 0.1;
+    score += (50 - get("モーター順位")) * 0.4;
+    score += get("マクール評価") * 1.5;
+    if (i >= 3) score += (8.0 - get("展示タイム")) * 2.0;
+    score += (39.0 - get("周回展示タイム")) * 1.0;
+    score += (7.0 - get("周り足タイム")) * 1.0;
+    if (i < 3) score += (8.0 - get("直線タイム")) * 1.5;
+    score += (0.3 - get("平均ST")) * 10.0;
+    score += (6.0 - get("スタート順位")) * 1.0;
+
+    const flyingEl = document.querySelector(`[name='フライング_${i}']`);
+    const flying = flyingEl ? flyingEl.value : "0";
+    if (flying === "F1") score -= 2;
+    if (flying === "F2") score -= 4;
+    if (flying === "F3") score -= 6;
+
+    score += get("決まり手勝率") * 0.1;
+
+    scores.push({艇番: i + 1, スコア: score});
+  }
+
+  scores.sort((a, b) => b.スコア - a.スコア);
+
+  const resultDiv = document.getElementById("results");
+  resultDiv.innerHTML = "<h3>スコア順位</h3><ol>" +
+    scores.map(s => `<li>${s.艇番}号艇：${s.スコア.toFixed(2)}</li>`).join("") +
+    "</ol>";
+
+  const preds = [];
+  const top2 = scores.slice(0, 2);
+  const top3 = scores.slice(0, 3);
+  const top4 = scores.slice(0, 4);
+
+  for (let a of top2) {
+    for (let b of top3) {
+      for (let c of top4) {
+        const set = new Set([a.艇番, b.艇番, c.艇番]);
+        if (set.size === 3) {
+          preds.push([a.艇番, b.艇番, c.艇番]);
+        }
+      }
+    }
+  }
+
+  resultDiv.innerHTML += "<h3>3連単予想</h3><ul>" +
+    preds.slice(0, 10).map(p => `<li>${p.join("-")}</li>`).join("") +
+    "</ul>";
+});
